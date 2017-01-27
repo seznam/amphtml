@@ -23,7 +23,7 @@ import {isExperimentOn} from '../../../src/experiments';
 import {isFiniteNumber} from '../../../src/types';
 import {resourcesForDoc} from '../../../src/resources';
 
-const TAG = 'AMP-BIND';
+const TAG = 'amp-bind';
 
 /**
  * Regular expression that identifies AMP CSS classes.
@@ -311,6 +311,8 @@ export class Bind {
           element.className = ampClasses.concat(newValue).join(' ');
         } else if (typeof newValue === 'string') {
           element.className = ampClasses.join(' ') + ' ' + newValue;
+        } else if (newValue === null) {
+          element.className = ampClasses.join(' ');
         } else {
           user().error(TAG, 'Invalid result for [class]', newValue);
         }
