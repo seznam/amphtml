@@ -15,7 +15,6 @@
  */
 
 import '../amp-selector';
-import {toggleExperiment} from '../../../../src/experiments';
 
 describes.realWin('amp-selector', {
   win: { /* window spec */
@@ -29,14 +28,6 @@ describes.realWin('amp-selector', {
 }, env => {
   let win;
   describe('test extension', () => {
-
-    beforeEach(() => {
-      toggleExperiment(window, 'amp-selector', true);
-    });
-
-    afterEach(() => {
-      toggleExperiment(window, 'amp-selector', false);
-    });
 
     function getSelector(options) {
       win = env.win;
@@ -550,10 +541,9 @@ describes.realWin('amp-selector', {
           selectedCount: 2,
         },
       });
-
+      ampSelector.build();
       const impl = ampSelector.implementation_;
       const triggerSpy = sandbox.spy(impl.action_, 'trigger');
-      ampSelector.build();
 
       impl.clickHandler_({target: impl.options_[3]});
 

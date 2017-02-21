@@ -17,9 +17,9 @@
 import {dev, rethrowAsync} from './log';
 import {documentStateFor} from './service/document-state';
 import {performanceFor} from './performance';
+import {resourcesForDoc} from './resources';
 import {setStyles} from './style';
 import {waitForServices} from './render-delaying-services';
-import {resourcesForDoc} from './resources';
 
 
 const bodyVisibleSentinel = '__AMP_BODY_VISIBLE';
@@ -92,7 +92,7 @@ export function insertStyleElement(doc, cssRoot, cssText, isRuntimeCss, ext) {
     const existing =
         isRuntimeCss ?
         cssRoot.querySelector('style[amp-runtime]') :
-        cssRoot.querySelector(`style[amp-extension=${ext}]`);
+        cssRoot./*OK*/querySelector(`style[amp-extension=${ext}]`);
     if (existing) {
       if (isRuntimeCss) {
         cssRoot.runtimeStyleElement = existing;
@@ -131,16 +131,20 @@ export function insertStyleElement(doc, cssRoot, cssText, isRuntimeCss, ext) {
  *     be blocked on key services being loaded.
  */
 export function makeBodyVisible(doc, opt_waitForServices) {
+  /** @const {!Window} */
+  const win = doc.defaultView;
+  if (win[bodyVisibleSentinel]) {
+    return;
+  }
   const set = () => {
     setStyles(dev().assertElement(doc.body), {
       opacity: 1,
       visibility: 'visible',
       animation: 'none',
     });
+    resourcesForDoc(doc).renderStarted();
   };
   try {
-    /** @const {!Window} */
-    const win = doc.defaultView;
     documentStateFor(win).onBodyAvailable(() => {
       if (win[bodyVisibleSentinel]) {
         return;
@@ -174,6 +178,16 @@ export function makeBodyVisible(doc, opt_waitForServices) {
     rethrowAsync(e);
   }
 }
+
+
+/**
+ * Indicates that the body is always visible. For instance, in case of PWA.
+ * @param {!Window} win
+ */
+export function bodyAlwaysVisible(win) {
+  win[bodyVisibleSentinel] = true;
+}
+
 
 /**
  * Checks whether a style element was registered in the DOM.

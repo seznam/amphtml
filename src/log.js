@@ -54,6 +54,14 @@ export const LogLevel = {
   FINE: 4,
 };
 
+/**
+ * Sets reportError function. Called from error.js to break cyclic
+ * dependency.
+ * @param {function(*, !Element=)|undefined} fn
+ */
+export function setReportError(fn) {
+  self.reportError = fn;
+}
 
 /**
  * Logging class.
@@ -202,7 +210,8 @@ export class Log {
   error(tag, var_args) {
     const error = this.error_.apply(this, arguments);
     if (error) {
-      this.win.setTimeout(() => {throw /** @type {!Error} */ (error);});
+      // reportError is installed globally per window in the entry point.
+      self.reportError(error);
     }
   }
 
@@ -216,7 +225,8 @@ export class Log {
     const error = this.error_.apply(this, arguments);
     if (error) {
       error.expected = true;
-      this.win.setTimeout(() => {throw /** @type {!Error} */ (error);});
+      // reportError is installed globally per window in the entry point.
+      self.reportError(error);
     }
   }
 
@@ -287,6 +297,8 @@ export class Log {
       e.associatedElement = firstElement;
       e.messageArray = messageArray;
       this.prepareError_(e);
+      // reportError is installed globally per window in the entry point.
+      self.reportError(e);
       throw e;
     }
     return shouldBeTrueish;
@@ -438,7 +450,11 @@ function createErrorVargs(var_args) {
  */
 export function rethrowAsync(var_args) {
   const error = createErrorVargs.apply(null, arguments);
-  setTimeout(() => {throw error;});
+  setTimeout(() => {
+    // reportError is installed globally per window in the entry point.
+    self.reportError(error);
+    throw error;
+  });
 }
 
 

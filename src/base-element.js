@@ -35,7 +35,7 @@ import {user} from './log';
  * https://developers.google.com/web/fundamentals/getting-started/primers/customelements)
  * and adding AMP style late loading to the mix.
  *
- * The complete lifecycle of custom DOM element is:
+ * The complete lifecycle of a custom DOM element is:
  *
  *           ||
  *           || createdCallback
@@ -150,6 +150,14 @@ export class BaseElement {
 
     /** @public {?Object} For use by sub classes */
     this.config = null;
+  }
+
+  /**
+   * The element's signal tracker.
+   * @return {!./utils/signals.Signals}
+   */
+  signals() {
+    return this.element.signals();
   }
 
   /**
@@ -627,6 +635,14 @@ export class BaseElement {
   }
 
   /**
+   * An implementation can call this method to signal to the element that
+   * it has started rendering.
+   */
+  renderStarted() {
+    this.element.renderStarted();
+  }
+
+  /**
    * Returns the original nodes of the custom element without any service nodes
    * that could have been added for markup. These nodes can include Text,
    * Comment and other child nodes.
@@ -681,8 +697,8 @@ export class BaseElement {
   }
 
   /**
-   * Returns the layout rectangle of the element used for reporting this
-   * element's intersection with the viewport.
+   * Returns the layout rectangle used for when calculating this element's
+   * intersection with the viewport.
    * @return {!./layout-rect.LayoutRectDef}
    */
   getIntersectionElementLayoutBox() {
@@ -761,6 +777,24 @@ export class BaseElement {
   }
 
   /**
+   * Collapses the element, setting it to `display: none`, and notifies its
+   * owner (if there is one) through {@link collapsedCallback} that the element
+   * is no longer visible.
+   */
+  collapse() {
+    this.element.getResources().collapseElement(this.element);
+  }
+
+  /**
+   * Return a promise that request the runtime to collapse one element
+   * @return {!Promise}
+   */
+  attemptCollapse() {
+    return this.element.getResources().attemptCollapse(this.element);
+  }
+
+
+  /**
    * Return a promise that requests the runtime to update
    * the height of this element to the specified value.
    * The runtime will schedule this request and attempt to process it
@@ -828,15 +862,6 @@ export class BaseElement {
   }
 
   /**
-   * Collapses the element, setting it to `display: none`, and notifies its
-   * owner (if there is one) through {@link collapsedCallback} that the element
-   * is no longer visible.
-   */
-  collapse() {
-    this.element.getResources().collapseElement(this.element);
-  }
-
-  /**
    * Called every time an owned AmpElement collapses itself.
    * See {@link collapse}.
    * @param {!AmpElement} unusedElement
@@ -866,25 +891,4 @@ export class BaseElement {
    * @public
    */
   onLayoutMeasure() {}
-
-  /**
-   * Triggers the signal with the specified name on the element. The time is
-   * optional; if not provided, the current time is used. The associated
-   * promise is resolved with the resulting time.
-   * @param {string} name
-   * @param {time=} opt_time
-   */
-  signal(name, opt_time) {
-    this.element.signal(name, opt_time);
-  }
-
-  /**
-   * Rejects the signal. Indicates that the signal will never succeed. The
-   * associated signal is rejected.
-   * @param {string} name
-   * @param {!Error} error
-   */
-  rejectSignal(name, error) {
-    this.element.rejectSignal(name, error);
-  }
-};
+}

@@ -22,6 +22,8 @@ import {
   AnalyticsEvent,
   ClickEventTracker,
   CustomEventTracker,
+  IniLoadTracker,
+  SignalTracker,
 } from './events';
 import {Observable} from '../../../src/observable';
 import {Visibility} from './visibility-impl';
@@ -38,9 +40,6 @@ import {isExperimentOn} from '../../../src/experiments';
 import {timerFor} from '../../../src/timer';
 import {viewerForDoc} from '../../../src/viewer';
 import {viewportForDoc} from '../../../src/viewport';
-import {
-  nativeIntersectionObserverSupported,
-} from '../../../src/intersection-observer-polyfill';
 
 const MIN_TIMER_INTERVAL_SECONDS_ = 0.5;
 const DEFAULT_MAX_TIMER_LENGTH_SECONDS_ = 7200;
@@ -64,6 +63,8 @@ export const AnalyticsEventType = {
   HIDDEN: 'hidden',
 };
 
+const ALLOWED_FOR_ALL = ['ampdoc', 'embed'];
+
 /**
  * Events that can result in analytics data to be sent.
  * @const {!Object<string, {
@@ -75,13 +76,23 @@ export const AnalyticsEventType = {
 const EVENT_TRACKERS = {
   'click': {
     name: 'click',
-    allowedFor: ['ampdoc', 'embed'],
+    allowedFor: ALLOWED_FOR_ALL,
     klass: ClickEventTracker,
   },
   'custom': {
     name: 'custom',
-    allowedFor: ['ampdoc', 'embed'],
+    allowedFor: ALLOWED_FOR_ALL,
     klass: CustomEventTracker,
+  },
+  'render-start': {
+    name: 'render-start',
+    allowedFor: ALLOWED_FOR_ALL,
+    klass: SignalTracker,
+  },
+  'ini-load': {
+    name: 'ini-load',
+    allowedFor: ALLOWED_FOR_ALL,
+    klass: IniLoadTracker,
   },
 };
 
@@ -118,9 +129,7 @@ export class InstrumentationService {
     this.ampdocRoot_ = new AmpdocAnalyticsRoot(this.ampdoc);
 
     /** @private {boolean} */
-    this.visibilityV2Enabled_ =
-        nativeIntersectionObserverSupported(ampdoc.win) &&
-            isExperimentOn(ampdoc.win, 'visibility-v2');
+    this.visibilityV2Enabled_ = isExperimentOn(ampdoc.win, 'visibility-v2');
 
     /** @const @private {!./visibility-impl.Visibility} */
     this.visibility_ = new Visibility(this.ampdoc);

@@ -84,9 +84,13 @@ html.i-amphtml-ios-embed {
 }
 
 #i-amphtml-wrapper > body {
+  /* Make sure position:absolute elements are positioned relative to the body,
+     not i-amp-html-wrapper */
   position: relative !important;
-  /* Border is necessary to avoid margins collapsing outside body.
-     Alternatively we can also set overflow to hidden. */
+  /* `body` must have a 1px transparent border for two purposes:
+      (1) to cancel out margin collapse in body's children so that position
+          absolute element is positioned correctly
+      (2) to offset scroll adjustment to 1 to avoid scroll freeze problem. */
   border-top: 1px solid transparent !important;
 }
 
@@ -311,6 +315,7 @@ i-amp-scroll-container {
  */
 i-amp-scroll-container.amp-active {
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .i-amphtml-loading-container {
@@ -530,11 +535,26 @@ amp-fresh {
   visibility: hidden;
 }
 
+.i-amphtml-jank-meter {
+  position: fixed;
+  background-color: rgba(232,72,95,.5);
+  bottom: 0;
+  right: 0;
+  color: #fff;
+  font-size: 16px;
+  width: 110px;
+  z-index: 1000;
+  padding: 5px;
+}
+
 /**
  * Animated equalizer icon for muted autoplaying videos.
  *
  * TODO(aghassemi, #5306): Move to video extension when video is out of core.
  */
+ i-amp-video-mask {
+  z-index: 1;
+}
 .amp-video-eq {
   align-items: flex-end;
   bottom: 7px;
@@ -545,6 +565,7 @@ amp-fresh {
   position: absolute;
   right: 7px;
   width: 20px;
+  z-index: 1;
 }
 .amp-video-eq .amp-video-eq-col {
   flex: 1;

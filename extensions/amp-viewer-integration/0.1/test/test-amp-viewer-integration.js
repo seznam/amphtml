@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-import {Messaging} from '../messaging.js';
+import {AmpViewerIntegration} from '../amp-viewer-integration';
+import {Messaging, WindowPortEmulator} from '../messaging.js';
 import {ViewerForTesting} from './viewer-for-testing.js';
+import {getSourceUrl} from '../../../../src/url';
 
 
 describes.sandboxed('AmpViewerIntegration', {}, () => {
@@ -23,10 +25,11 @@ describes.sandboxed('AmpViewerIntegration', {}, () => {
   describe('Handshake', function() {
     let viewerEl;
     let viewer;
+    let ampDocUrl;
 
     beforeEach(() => {
       const loc = window.location;
-      const ampDocUrl =
+      ampDocUrl =
         `${loc.protocol}//iframe.${loc.hostname}:${loc.port}${ampDocSrc}`;
 
       viewerEl = document.createElement('div');
@@ -40,7 +43,7 @@ describes.sandboxed('AmpViewerIntegration', {}, () => {
     });
 
     it('should confirm the handshake', () => {
-      console.log('sending handshake response');
+      console/*OK*/.log('sending handshake response');
       viewer.confirmHandshake();
       return viewer.waitForDocumentLoaded();
     });
@@ -51,6 +54,42 @@ describes.sandboxed('AmpViewerIntegration', {}, () => {
         const stub = sandbox.stub(viewer, 'handleUnload_');
         window.eventListeners.fire({type: 'unload'});
         expect(stub).to.be.calledOnce;
+      });
+    });
+
+
+    describes.realWin('amp-viewer-integration', {
+      amp: {
+        location: 'https://cdn.ampproject.org/c/s/www.example.com/path',
+        params: {
+          origin: 'https://example.com',
+        },
+      },
+    }, env => {
+      describe('Open Channel', () => {
+        it('should start with the correct message', () => {
+          const ampdocUrl = env.ampdoc.getUrl();
+          const srcUrl = getSourceUrl(ampdocUrl);
+
+          class Messaging {
+            constructor() {}
+            sendRequest() {}
+            setup_() {}
+          }
+          const messaging = new Messaging();
+          const win = document.createElement('div');
+          win.document = document.createElement('div');
+          const ampViewerIntegration = new AmpViewerIntegration(win);
+          const sendRequestSpy = sandbox.stub(messaging, 'sendRequest', () => {
+            return Promise.resolve();
+          });
+          ampViewerIntegration.openChannelAndStart_(
+            viewer, env.ampdoc, messaging);
+          expect(sendRequestSpy).to.have.been.calledWith('channelOpen', {
+            sourceUrl: srcUrl,
+            url: ampdocUrl,
+          }, true);
+        });
       });
     });
   });
@@ -69,15 +108,17 @@ describes.sandboxed('AmpViewerIntegration', {}, () => {
       postMessagePromise = new Promise(resolve => {
         postMessageResolve = resolve;
       });
-      postMessageSpy = sandbox.stub(window, 'postMessage', () => {
+
+      const port = new WindowPortEmulator(
+        this.win, viewerOrigin);
+      port.addEventListener = function() {};
+      port.postMessage = function() {};
+
+      postMessageSpy = sandbox.stub(port, 'postMessage', () => {
         postMessageResolve();
       });
 
-      const source = {
-        postMessage: function() {},
-        addEventListener: function() {},
-      };
-      messaging = new Messaging(source, window, viewerOrigin);
+      messaging = new Messaging(this.win, port);
       messaging.setRequestProcessor(requestProcessor);
     });
 

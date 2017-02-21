@@ -16,9 +16,7 @@
 
 import {BindExpression} from './bind-expression';
 import {BindValidator} from './bind-validator';
-import {user} from '../../../src/log';
-
-const TAG = 'AMP-BIND';
+import {filterSplice} from '../../../src/utils/array';
 
 /**
  * @typedef {{
@@ -27,7 +25,7 @@ const TAG = 'AMP-BIND';
  *   expressionString: string,
  * }}
  */
-export let EvaluateeDef;
+export let BindingDef;
 
 /**
  * @typedef {{
@@ -36,83 +34,116 @@ export let EvaluateeDef;
  *   expression: !BindExpression,
  * }}
  */
-let ParsedEvaluateeDef;
+let ParsedBindingDef;
 
 /**
  * Asynchronously evaluates a set of Bind expressions.
  */
 export class BindEvaluator {
-  /**
-   * @param {!Array<EvaluateeDef>} evaluatees
-   */
-  constructor(evaluatees) {
-    /** @const {!Array<ParsedEvaluateeDef>} */
-    this.parsedEvaluatees_ = [];
+  constructor() {
+    /** @const @private {!Array<ParsedBindingDef>} */
+    this.parsedBindings_ = [];
 
     /** @const {!./bind-validator.BindValidator} */
     this.validator_ = new BindValidator();
+  }
 
+  /**
+   * Parses and stores given bindings into expression objects and returns map
+   * of expression string to parse errors.
+   * @param {!Array<BindingDef>} bindings
+   * @return {!Object<string,!Error>}
+   */
+  addBindings(bindings) {
+    const errors = Object.create(null);
     // Create BindExpression objects from expression strings.
-    for (let i = 0; i < evaluatees.length; i++) {
-      const e = evaluatees[i];
+    // TODO(choumx): Chunk creation of BindExpression or change to web worker.
+    for (let i = 0; i < bindings.length; i++) {
+      const e = bindings[i];
+      const string = e.expressionString;
 
       let expression;
       try {
         expression = new BindExpression(e.expressionString);
       } catch (error) {
-        user().error(TAG, 'Malformed expression:', error);
+        errors[string] = error;
         continue;
       }
 
-      this.parsedEvaluatees_.push({
+      this.parsedBindings_.push({
         tagName: e.tagName,
         property: e.property,
         expression,
       });
     }
+    return errors;
   }
 
   /**
-   * Evaluates all expressions with the given `scope` data and resolves
-   * the returned Promise with a map of expression strings to results.
+   * Removes all parsed bindings for the provided expressions.
+   * @param {!Array<string>} expressionStrings
+   */
+  removeBindingsWithExpressionStrings(expressionStrings) {
+    const expressionsToRemove = Object.create(null);
+    for (let i = 0; i < expressionStrings.length; i++) {
+      expressionsToRemove[expressionStrings[i]] = true;
+    }
+
+    filterSplice(this.parsedBindings_, binding => {
+      const expressionString = binding.expression.expressionString;
+      return !expressionsToRemove[expressionString];
+    });
+  }
+
+  /**
+   * Evaluates all expressions with the given `scope` data returns two maps:
+   * expression strings to results and expression strings to errors.
    * @param {!Object} scope
-   * @return {
-   *   !Promise<!Object<string, ./bind-expression.BindExpressionResultDef>>
-   * }
+   * @return {{
+   *   results: !Object<string, ./bind-expression.BindExpressionResultDef>,
+   *   errors: !Object<string, !Error>,
+   * }}
    */
   evaluate(scope) {
-    return new Promise(resolve => {
-      /** @type {!Object<string, ./bind-expression.BindExpressionResultDef>} */
-      const cache = {};
-      /** @type {!Object<string, boolean>} */
-      const invalid = {};
+    /** @type {!Object<string, ./bind-expression.BindExpressionResultDef>} */
+    const cache = {};
+    /** @type {!Object<string, !Error>} */
+    const errors = {};
 
-      this.parsedEvaluatees_.forEach(evaluatee => {
-        const {tagName, property, expression} = evaluatee;
-        const expr = expression.expressionString;
+    this.parsedBindings_.forEach(binding => {
+      const {tagName, property, expression} = binding;
+      const expr = expression.expressionString;
 
-        // Skip if we've already evaluated this expression string.
-        if (cache[expr] !== undefined || invalid[expr]) {
-          return;
-        }
+      // Skip if we've already evaluated this expression string.
+      if (cache[expr] !== undefined || errors[expr]) {
+        return;
+      }
 
-        let result;
-        try {
-          result = evaluatee.expression.evaluate(scope);
-        } catch (error) {
-          user().error(TAG, error);
-          return;
-        }
+      let result;
+      try {
+        result = binding.expression.evaluate(scope);
+      } catch (error) {
+        errors[expr] = error;
+        return;
+      }
 
-        const resultString = this.stringValueOf_(property, result);
-        if (this.validator_.isResultValid(tagName, property, resultString)) {
-          cache[expr] = result;
-        } else {
-          invalid[expr] = true;
-        }
-      });
-      resolve(cache);
+      const resultString = this.stringValueOf_(property, result);
+      if (this.validator_.isResultValid(tagName, property, resultString)) {
+        cache[expr] = result;
+      } else {
+        errors[expr] = new Error(
+            `"${result}" is not a valid result for [${property}].`);
+      }
     });
+    return {results: cache, errors};
+  }
+
+  /**
+   * Return parsed bindings for testing.
+   * @visibleForTesting {!Array<ParsedBindingDef>}
+   */
+  parsedBindingsForTesting() {
+    return this.parsedBindings_;
   }
 
   /**

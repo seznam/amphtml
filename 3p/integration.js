@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,7 +35,7 @@ import {
 import {urls} from '../src/config';
 import {endsWith} from '../src/string';
 import {parseUrl, getSourceUrl, isProxyOrigin} from '../src/url';
-import {dev, initLogConstructor, user} from '../src/log';
+import {dev, initLogConstructor, setReportError, user} from '../src/log';
 import {getMode} from '../src/mode';
 
 // 3P - please keep in alphabetic order
@@ -56,9 +56,11 @@ import {adman} from '../ads/adman';
 import {adreactor} from '../ads/adreactor';
 import {adsense} from '../ads/google/adsense';
 import {adsnative} from '../ads/adsnative';
+import {adspeed} from '../ads/adspeed';
 import {adspirit} from '../ads/adspirit';
 import {adstir} from '../ads/adstir';
 import {adtech} from '../ads/adtech';
+import {adthrive} from '../ads/adthrive';
 import {aduptech} from '../ads/aduptech';
 import {adverline} from '../ads/adverline';
 import {adverticum} from '../ads/adverticum';
@@ -67,7 +69,9 @@ import {affiliateb} from '../ads/affiliateb';
 import {amoad} from '../ads/amoad';
 import {appnexus} from '../ads/appnexus';
 import {atomx} from '../ads/atomx';
+import {brainy} from '../ads/brainy';
 import {caajainfeed} from '../ads/caajainfeed';
+import {capirs} from '../ads/capirs';
 import {caprofitx} from '../ads/caprofitx';
 import {chargeads} from '../ads/chargeads';
 import {colombia} from '../ads/colombia';
@@ -78,6 +82,7 @@ import {distroscale} from '../ads/distroscale';
 import {ezoic} from '../ads/ezoic';
 import {dotandads} from '../ads/dotandads';
 import {doubleclick} from '../ads/google/doubleclick';
+import {eas} from '../ads/eas';
 import {eplanning} from '../ads/eplanning';
 import {f1e} from '../ads/f1e';
 import {felmat} from '../ads/felmat';
@@ -92,6 +97,7 @@ import {improvedigital} from '../ads/improvedigital';
 import {inmobi} from '../ads/inmobi';
 import {ix} from '../ads/ix';
 import {kargo} from '../ads/kargo';
+import {kiosked} from '../ads/kiosked';
 import {kixer} from '../ads/kixer';
 import {ligatus} from '../ads/ligatus';
 import {loka} from '../ads/loka';
@@ -103,6 +109,7 @@ import {mediavine} from '../ads/mediavine';
 import {meg} from '../ads/meg';
 import {microad} from '../ads/microad';
 import {mixpo} from '../ads/mixpo';
+import {mywidget} from '../ads/mywidget';
 import {nativo} from '../ads/nativo';
 import {nend} from '../ads/nend';
 import {nokta} from '../ads/nokta';
@@ -115,13 +122,16 @@ import {pubmine} from '../ads/pubmine';
 import {pulsepoint} from '../ads/pulsepoint';
 import {purch} from '../ads/purch';
 import {revcontent} from '../ads/revcontent';
+import {relap} from '../ads/relap';
 import {rubicon} from '../ads/rubicon';
 import {sharethrough} from '../ads/sharethrough';
 import {sklik} from '../ads/sklik';
+import {slimcutmedia} from '../ads/slimcutmedia';
 import {smartadserver} from '../ads/smartadserver';
 import {smartclip} from '../ads/smartclip';
 import {sortable} from '../ads/sortable';
 import {sovrn} from '../ads/sovrn';
+import {swoop} from '../ads/swoop';
 import {taboola} from '../ads/taboola';
 import {teads} from '../ads/teads';
 import {triplelift} from '../ads/triplelift';
@@ -130,7 +140,6 @@ import {webediads} from '../ads/webediads';
 import {weboramaDisplay} from '../ads/weborama';
 import {widespace} from '../ads/widespace';
 import {xlift} from '../ads/xlift';
-import {xrostssp} from '../ads/xrostssp';
 import {yahoo} from '../ads/yahoo';
 import {yahoojp} from '../ads/yahoojp';
 import {yieldbot} from '../ads/yieldbot';
@@ -147,6 +156,7 @@ import {zucks} from '../ads/zucks';
 const AMP_EMBED_ALLOWED = {
   _ping_: true,
   'mantis-recommend': true,
+  mywidget: true,
   plista: true,
   smartclip: true,
   taboola: true,
@@ -164,12 +174,15 @@ try {
   window.context = data._context;
 } catch (err) {
   window.context = {};
-  dev().info(
-      'INTEGRATION', 'Could not parse context from:', iframeName);
+  if (!getMode().test) {
+    dev().info(
+        'INTEGRATION', 'Could not parse context from:', iframeName);
+  }
 }
 
 // This should only be invoked after window.context is set
 initLogConstructor();
+setReportError(console.error.bind(console));
 
 // Experiment toggles
 setExperimentToggles(window.context.experimentToggles);
@@ -191,9 +204,11 @@ register('adman', adman);
 register('adreactor', adreactor);
 register('adsense', adsense);
 register('adsnative', adsnative);
+register('adspeed', adspeed);
 register('adspirit', adspirit);
 register('adstir', adstir);
 register('adtech', adtech);
+register('adthrive', adthrive);
 register('aduptech', aduptech);
 register('adverline', adverline);
 register('adverticum', adverticum);
@@ -202,7 +217,9 @@ register('affiliateb', affiliateb);
 register('amoad', amoad);
 register('appnexus', appnexus);
 register('atomx', atomx);
+register('brainy', brainy);
 register('caajainfeed', caajainfeed);
+register('capirs', capirs);
 register('caprofitx', caprofitx);
 register('chargeads', chargeads);
 register('colombia', colombia);
@@ -212,6 +229,7 @@ register('csa', csa);
 register('distroscale', distroscale);
 register('dotandads', dotandads);
 register('doubleclick', doubleclick);
+register('eas', eas);
 register('eplanning', eplanning);
 register('ezoic', ezoic);
 register('f1e', f1e);
@@ -229,6 +247,7 @@ register('industrybrains', industrybrains);
 register('inmobi', inmobi);
 register('ix', ix);
 register('kargo', kargo);
+register('kiosked', kiosked);
 register('kixer', kixer);
 register('ligatus', ligatus);
 register('loka', loka);
@@ -241,6 +260,7 @@ register('mediavine', mediavine);
 register('meg', meg);
 register('microad', microad);
 register('mixpo', mixpo);
+register('mywidget', mywidget);
 register('nativo', nativo);
 register('nend', nend);
 register('nokta', nokta);
@@ -253,14 +273,17 @@ register('pubmine', pubmine);
 register('pulsepoint', pulsepoint);
 register('purch', purch);
 register('reddit', reddit);
+register('relap', relap);
 register('revcontent', revcontent);
 register('rubicon', rubicon);
 register('sharethrough', sharethrough);
 register('sklik', sklik);
+register('slimcutmedia', slimcutmedia);
 register('smartadserver', smartadserver);
 register('smartclip', smartclip);
 register('sortable', sortable);
 register('sovrn', sovrn);
+register('swoop', swoop);
 register('taboola', taboola);
 register('teads', teads);
 register('triplelift', triplelift);
@@ -270,7 +293,6 @@ register('webediads', webediads);
 register('weborama-display', weboramaDisplay);
 register('widespace', widespace);
 register('xlift' , xlift);
-register('xrostssp', xrostssp);
 register('yahoo', yahoo);
 register('yahoojp', yahoojp);
 register('yieldbot', yieldbot);

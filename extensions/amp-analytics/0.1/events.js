@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
+import {CommonSignals} from '../../../src/common-signals';
 import {Observable} from '../../../src/observable';
 import {getDataParamsFromAttributes} from '../../../src/dom';
 import {user} from '../../../src/log';
 
 const VARIABLE_DATA_ATTRIBUTE_KEY = /^vars(.+)/;
+const NO_UNLISTEN = function() {};
 
 
 /**
@@ -202,5 +204,106 @@ export class ClickEventTracker extends EventTracker {
         /* computeParamNameFunc */ undefined,
         VARIABLE_DATA_ATTRIBUTE_KEY);
     listener(new AnalyticsEvent(target, 'click', params));
+  }
+}
+
+
+/**
+ * Tracks events based on signals.
+ */
+export class SignalTracker extends EventTracker {
+  /**
+   * @param {!./analytics-root.AnalyticsRoot} root
+   */
+  constructor(root) {
+    super(root);
+  }
+
+  /** @override */
+  dispose() {
+  }
+
+  /** @override */
+  add(context, eventType, config, listener) {
+    let target;
+    let signalsPromise;
+    const selector = config['selector'] || ':root';
+    if (selector == ':root' || selector == ':host') {
+      // Root selectors are delegated to analytics roots.
+      target = this.root.getRootElement();
+      signalsPromise = Promise.resolve(this.root.signals());
+    } else {
+      // Look for the AMP-element. Wait for DOM to be fully parsed to avoid
+      // false missed searches.
+      signalsPromise = this.root.ampdoc.whenReady().then(() => {
+        const selectionMethod = config['selectionMethod'];
+        const element = user().assertElement(
+            this.root.getAmpElement(
+                (context.parentElement || context),
+                selector,
+                selectionMethod),
+            `Element "${selector}" not found`);
+        target = element;
+        return element.signals();
+      });
+    }
+
+    // Wait for the target and the event signal.
+    signalsPromise.then(signals => signals.whenSignal(eventType)).then(() => {
+      listener(new AnalyticsEvent(target, eventType));
+    });
+    return NO_UNLISTEN;
+  }
+}
+
+
+/**
+ * Tracks when the elements in the first viewport has been loaded - "ini-load".
+ */
+export class IniLoadTracker extends EventTracker {
+  /**
+   * @param {!./analytics-root.AnalyticsRoot} root
+   */
+  constructor(root) {
+    super(root);
+  }
+
+  /** @override */
+  dispose() {
+  }
+
+  /** @override */
+  add(context, eventType, config, listener) {
+    let target;
+    let promise;
+    const selector = config['selector'] || ':root';
+    if (selector == ':root' || selector == ':host') {
+      // Root selectors are delegated to analytics roots.
+      target = this.root.getRootElement();
+      promise = this.root.whenIniLoaded();
+    } else {
+      // An AMP-element. Wait for DOM to be fully parsed to avoid
+      // false missed searches.
+      promise = this.root.ampdoc.whenReady().then(() => {
+        const selectionMethod = config['selectionMethod'];
+        const element = user().assertElement(
+            this.root.getAmpElement(
+                (context.parentElement || context),
+                selector,
+                selectionMethod),
+            `Element "${selector}" not found`);
+        target = element;
+        const signals = element.signals();
+        return Promise.race([
+          signals.whenSignal(CommonSignals.INI_LOAD),
+          signals.whenSignal(CommonSignals.LOAD_END),
+        ]);
+      });
+    }
+    // Wait for the target and the event.
+    promise.then(() => {
+      listener(new AnalyticsEvent(target, eventType));
+    });
+    return NO_UNLISTEN;
   }
 }
