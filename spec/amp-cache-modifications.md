@@ -2,6 +2,8 @@
 
 These are guidelines for what AMP cache implementations should look like. Some items are required for overall security of the platform while others are suggestions for performance improvements. All modifications are made to both AMP and AMP4ADS documents except where noted.
 
+For example, given a [recent version](https://github.com/ampproject/amphtml/tree/master/spec/amp-cache-modifications.everything.amp.html) of [everything.amp.html](https://github.com/ampproject/amphtml/blob/master/examples/everything.amp.html), the output after modifications will be [this version](https://github.com/ampproject/amphtml/tree/master/spec/amp-cache-modifications.everything.cache.html).
+
 ### HTML Sanitization
 
 The AMP Cache parses and re-serializes all documents to remove any ambiguities in parsing the document which might result in subtly different parses in different browsers.
@@ -35,7 +37,7 @@ The AMP Cache parses and re-serializes all documents to remove any ambiguities i
 
 | before | after |
 | --- | --- |
-| `<p data-foo=’< >’>` | `<p data-foo="&lt; &gt">` |
+| `<p data-foo='< >'>` | `<p data-foo="&lt; &gt">` |
 
 </details>
 
@@ -103,7 +105,9 @@ The AMP Cache parses and re-serializes all documents to remove any ambiguities i
 
 The AMP Cache rewrites URLs found in the AMP HTML for two purposes. One is to rebase relative URLs found in the document so that the URL remains the same when loaded from the AMP Cache. The other reason is to improve performance by selecting a different equivalent resource. This includes rewriting image and font URLs to use a cached copy and rewriting AMP javascript URLs to use a copy with longer cache lifetimes.
 
-#### All relative `href` , `src` and `data-iframe-src` URLs are rewritten as absolute URLs
+#### All relative `href` , `src`, `data-iframe-src` and `data-no-service-worker-fallback-shell-url` URLs are rewritten as absolute URLs
+
+`data-iframe-src` and `data-no-service-worker-fallback-shell-url` are part of `<amp-install-serviceworker>` [spec](https://www.ampproject.org/docs/reference/components/amp-install-serviceworker).
 
 <details>
 <summary>example</summary>
@@ -306,7 +310,7 @@ If the document is using `amp-access` type of `server` then the AMP Cache remove
 #### Remove attribute `nonce`
 
 *Condition*:
-Remove `nonce` from every tag except for those that are only inserted by the AMP cache `<meta content=NONCE name=i-amphtml-access-state>` and `<meta content=NONCE name=i-amp-access-state>`
+Remove `nonce` attribute from every tag.
 
 <details>
 <summary>example</summary>

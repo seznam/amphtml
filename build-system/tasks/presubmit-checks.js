@@ -97,7 +97,7 @@ var forbiddenTerms = {
     message: realiasGetMode,
     whitelist: [
       'src/mode-object.js',
-      'src/3p-frame.js',
+      'src/iframe-attributes.js',
       'src/log.js',
       'dist.3p/current/integration.js',
     ],
@@ -154,7 +154,7 @@ var forbiddenTerms = {
       'extensions/amp-analytics/0.1/amp-analytics.js',
     ],
   },
-  'installCidServiceForDocForTesting': {
+  'cidServiceForDocForTesting': {
     message: privateServiceFactory,
     whitelist: [
       'extensions/amp-analytics/0.1/cid-impl.js',
@@ -318,6 +318,7 @@ var forbiddenTerms = {
       'build-system/test-server.js',
       'src/cookies.js',
       'extensions/amp-analytics/0.1/cid-impl.js',
+      'testing/fake-dom.js',
     ],
   },
   'getCookie\\W': {
@@ -484,21 +485,29 @@ var forbiddenTerms = {
     message: 'Do not access AMP_CONFIG directly. Use isExperimentOn() ' +
         'and getMode() to access config',
     whitelist: [
-      'build-system/server.js',
       'build-system/amp.extern.js',
-      'build-system/tasks/prepend-global/test.js',
+      'build-system/server.js',
       'build-system/tasks/prepend-global/index.js',
-      'src/service-worker/core.js',
-      'src/service-worker/error-reporting.js',
-      'src/mode.js',
-      'src/experiments.js',
-      'src/config.js',
+      'build-system/tasks/prepend-global/test.js',
       'dist.3p/current/integration.js',
+      'src/config.js',
+      'src/experiments.js',
+      'src/mode.js',
+      'src/service-worker/core.js',
+      'src/worker-error-reporting.js',
     ],
   },
   'data:image/svg(?!\\+xml;charset=utf-8,)[^,]*,': {
     message: 'SVG data images must use charset=utf-8: ' +
         '"data:image/svg+xml;charset=utf-8,..."',
+  },
+  'installWorkerErrorReporting': {
+    message: 'Should only be used in worker entry points',
+    whitelist: [
+      'src/web-worker/web-worker.js',
+      'src/service-worker/shell.js',
+      'src/worker-error-reporting.js',
+    ],
   }
 };
 
@@ -559,11 +568,11 @@ var forbiddenTermsSrcInclusive = {
   '\\.changeSize\\(': bannedTermsHelpString,
   '\\.attemptChangeHeight\\(0\\)': 'please consider using `attemptCollapse()`',
   '\\.collapse\\(': bannedTermsHelpString,
+  '\\.expand\\(': bannedTermsHelpString,
   '\\.focus\\(': bannedTermsHelpString,
   '\\.getBBox\\(': bannedTermsHelpString,
   '\\.getBoundingClientRect\\(': bannedTermsHelpString,
   '\\.getClientRects\\(': bannedTermsHelpString,
-  '\\.getComputedStyle\\(': bannedTermsHelpString,
   '\\.getMatchedCSSRules\\(': bannedTermsHelpString,
   '\\.postMessage\\(': bannedTermsHelpString,
   '\\.scrollBy\\(': bannedTermsHelpString,
@@ -573,6 +582,14 @@ var forbiddenTermsSrcInclusive = {
   '\\.webkitConvertPointFromNodeToPage\\(': bannedTermsHelpString,
   '\\.webkitConvertPointFromPageToNode\\(': bannedTermsHelpString,
   '\\.scheduleUnlayout\\(': bannedTermsHelpString,
+  'getComputedStyle\\(': {
+    message: 'Due to various bugs in Firefox, you must use the computedStyle ' +
+        'helper in style.js.',
+    whitelist: [
+      'src/style.js',
+      'dist.3p/current/integration.js',
+    ],
+  },
   // Super complicated regex that says "find any querySelector method call that
   // is passed as a variable anything that is not a string, or a string that
   // contains a space.
@@ -594,6 +611,7 @@ var forbiddenTermsSrcInclusive = {
       'src/shadow-embed.js',
       'extensions/amp-ad/0.1/amp-ad.js',
       'extensions/amp-a4a/0.1/amp-a4a.js',
+      'ads/google/a4a/utils.js',
     ],
   },
   'loadElementClass': {
@@ -621,6 +639,7 @@ var forbiddenTermsSrcInclusive = {
       'src/friendly-iframe-embed.js',
       'src/service/performance-impl.js',
       'src/service/url-replacements-impl.js',
+      'src/service/variable-source.js',
       'extensions/amp-ad/0.1/amp-ad-xorigin-iframe-handler.js',
       'extensions/amp-image-lightbox/0.1/amp-image-lightbox.js',
       'extensions/amp-analytics/0.1/transport.js',
@@ -655,6 +674,22 @@ var forbiddenTermsSrcInclusive = {
     whitelist: [
       'extensions/amp-form/0.1/amp-form.js',
       'src/service/url-replacements-impl.js',
+    ],
+  },
+  '(cdn|3p)\\.ampproject\\.': {
+    message: 'The CDN domain should typically not be hardcoded in source ' +
+        'code. Use a property of urls from src/config.js instead.',
+    whitelist: [
+      'ads/_a4a-config.js',
+      'build-system/server.js',
+      'dist.3p/current/integration.js',
+      'extensions/amp-iframe/0.1/amp-iframe.js',
+      'src/config.js',
+      'testing/local-amp-chrome-extension/background.js',
+      'tools/errortracker/errortracker.go',
+      'validator/nodejs/index.js',
+      'validator/webui/serve-standalone.go',
+      'build-system/tasks/extension-generator/index.js',
     ],
   },
 };
@@ -784,7 +819,8 @@ function hasAnyTerms(file) {
 
   hasTerms = matchTerms(file, forbiddenTerms);
 
-  var isTestFile = /^test-/.test(basename) || /^_init_tests/.test(basename);
+  var isTestFile = /^test-/.test(basename) || /^_init_tests/.test(basename)
+      || /_test\.js$/.test(basename);
   if (!isTestFile) {
     hasSrcInclusiveTerms = matchTerms(file, forbiddenTermsSrcInclusive);
   }

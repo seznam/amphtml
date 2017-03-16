@@ -28,7 +28,7 @@ import {fromClassForDoc} from '../service';
 import {inputFor} from '../input';
 import {viewerForDoc} from '../viewer';
 import {viewportForDoc} from '../viewport';
-import {installVsyncService} from './vsync-impl';
+import {vsyncFor} from '../vsync';
 import {isArray} from '../types';
 import {dev} from '../log';
 import {reportError} from '../error';
@@ -36,6 +36,7 @@ import {filterSplice} from '../utils/array';
 import {getSourceUrl} from '../url';
 import {areMarginsChanged} from '../layout-rect';
 import {documentInfoForDoc} from '../document-info';
+import {computedStyle} from '../style';
 
 const TAG_ = 'Resources';
 const READY_SCAN_SIGNAL_ = 'ready-scan';
@@ -49,6 +50,7 @@ const POST_TASK_PASS_DELAY_ = 1000;
 const MUTATE_DEFER_DELAY_ = 500;
 const FOCUS_HISTORY_TIMEOUT_ = 1000 * 60;  // 1min
 const FOUR_FRAME_DELAY_ = 70;
+const DOM_NODE_UID_PROPERTY = '__AMP__NODE_UID';
 
 
 /**
@@ -101,6 +103,9 @@ export class Resources {
 
     /** @private {number} */
     this.addCount_ = 0;
+
+    /** @private {number} */
+    this.nodeUidCount_ = 1;
 
     /** @private {boolean} */
     this.visible_ = this.viewer_.isVisible();
@@ -166,7 +171,7 @@ export class Resources {
     this.viewport_ = viewportForDoc(this.ampdoc);
 
     /** @private @const {!./vsync-impl.Vsync} */
-    this.vsync_ = installVsyncService(this.win);
+    this.vsync_ = vsyncFor(this.win);
 
     /** @private @const {!FocusHistory} */
     this.activeHistory_ = new FocusHistory(this.win, FOCUS_HISTORY_TIMEOUT_);
@@ -272,8 +277,6 @@ export class Resources {
    * @return {!Promise<!Array<!Resource>>}
    */
   getResourcesInRect(hostWin, rect, opt_isInPrerender) {
-    opt_isInPrerender = opt_isInPrerender || false;
-
     // First, wait for the `ready-scan` signal. Waiting for each element
     // individually is too expensive and `ready-scan` will cover most of
     // the initially parsed elements.
@@ -307,6 +310,27 @@ export class Resources {
         }
         return true;
       });
+    });
+  }
+
+  /**
+   * Returns a subset of resources which is identified as being in the current
+   * viewport.
+   * @param {boolean=} opt_isInPrerender signifies if we are in prerender mode.
+   * @return {!Array<!Resource>}
+   * TODO(dvoytenko, #7815): remove once the reporting regression is confirmed.
+   */
+  getResourcesInViewportLegacy(opt_isInPrerender) {
+    opt_isInPrerender = opt_isInPrerender || false;
+    const viewportRect = this.viewport_.getRect();
+    return this.resources_.filter(r => {
+      if (r.hasOwner() || !r.isDisplayed() || !r.overlaps(viewportRect)) {
+        return false;
+      }
+      if (opt_isInPrerender && !r.prerenderAllowed()) {
+        return false;
+      }
+      return true;
     });
   }
 
@@ -389,6 +413,15 @@ export class Resources {
     return this.vsync_.measurePromise(() => {
       return this.getViewport().getLayoutRect(element);
     });
+  }
+
+  /**
+   * @param {!Node} node
+   * @return {number}
+   */
+  getNodeUid(node) {
+    return node[DOM_NODE_UID_PROPERTY] ||
+        (node[DOM_NODE_UID_PROPERTY] = this.nodeUidCount_++);
   }
 
   /**
@@ -863,6 +896,22 @@ export class Resources {
   }
 
   /**
+   * Expands the element.
+   * @param {!Element} element
+   */
+  expandElement(element) {
+    const resource = Resource.forElement(element);
+    resource.completeExpand();
+
+    const owner = resource.getOwner();
+    if (owner) {
+      owner.expandedCallback(element);
+    }
+
+    this.schedulePass(FOUR_FRAME_DELAY_);
+  }
+
+  /**
    * Schedules the work pass at the latest with the specified delay.
    * @param {number=} opt_delay
    * @param {boolean=} opt_relayoutAll
@@ -1052,9 +1101,13 @@ export class Resources {
           // an element's boundary is not changed above the viewport after
           // resize.
           resize = true;
-        } else if (bottomDisplacedBoundary <= viewportRect.top + topOffset) {
+        } else if (viewportRect.top > 1 &&
+            bottomDisplacedBoundary <= viewportRect.top + topOffset) {
           // 5. Elements above the viewport can only be resized if we are able
-          // to compensate the height change by setting scrollTop.
+          // to compensate the height change by setting scrollTop and only if
+          // the page has already been scrolled by some amount (1px due to iOS).
+          // Otherwise the scrolling might move important things like the menu
+          // bar out of the viewport at initial page load.
           if (heightDiff < 0 &&
               viewportRect.top + aboveVpHeightChange < -heightDiff) {
             // Do nothing if height abobe viewport height can't compensate
@@ -1546,12 +1599,12 @@ export class Resources {
    * @private
    */
   getLayoutMargins_(resource) {
-    const computedStyle = this.win./*OK*/getComputedStyle(resource.element);
+    const style = computedStyle(this.win, resource.element);
     return {
-      top: parseInt(computedStyle.marginTop, 10) || 0,
-      right: parseInt(computedStyle.marginRight, 10) || 0,
-      bottom: parseInt(computedStyle.marginBottom, 10) || 0,
-      left: parseInt(computedStyle.marginLeft, 10) || 0,
+      top: parseInt(style.marginTop, 10) || 0,
+      right: parseInt(style.marginRight, 10) || 0,
+      bottom: parseInt(style.marginBottom, 10) || 0,
+      left: parseInt(style.marginLeft, 10) || 0,
     };
   }
 

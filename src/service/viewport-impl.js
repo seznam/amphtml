@@ -17,6 +17,7 @@
 import {Animation} from '../animation';
 import {FixedLayer} from './fixed-layer';
 import {Observable} from '../observable';
+import {VisibilityState} from '../visibility-state';
 import {checkAndFix as checkAndFixIosScrollfreezeBug,} from
     './ios-scrollfreeze-bug';
 import {
@@ -28,9 +29,9 @@ import {dev} from '../log';
 import {numeric} from '../transition';
 import {onDocumentReady, whenDocumentReady} from '../document-ready';
 import {platformFor} from '../platform';
-import {px, setStyle, setStyles} from '../style';
+import {px, setStyle, setStyles, computedStyle} from '../style';
 import {timerFor} from '../timer';
-import {installVsyncService} from './vsync-impl';
+import {vsyncFor} from '../vsync';
 import {viewerForDoc} from '../viewer';
 import {isExperimentOn} from '../experiments';
 import {waitForBody, isIframed} from '../dom';
@@ -114,7 +115,7 @@ export class Viewport {
     this.timer_ = timerFor(this.ampdoc.win);
 
     /** @private {!./vsync-impl.Vsync} */
-    this.vsync_ = installVsyncService(this.ampdoc.win);
+    this.vsync_ = vsyncFor(this.ampdoc.win);
 
     /** @private {boolean} */
     this.scrollTracking_ = false;
@@ -178,6 +179,12 @@ export class Viewport {
             isExperimentOn(this.ampdoc.win, 'make-body-block')) {
       this.globalDoc_.documentElement.classList.add(
           'i-amphtml-make-body-block');
+    }
+
+    // To avoid browser restore scroll position when traverse history
+    if (isIframed(this.ampdoc.win) &&
+        ('scrollRestoration' in this.ampdoc.win.history)) {
+      this.ampdoc.win.history.scrollRestoration = 'manual';
     }
   }
 
@@ -279,7 +286,20 @@ export class Viewport {
     if (this.size_) {
       return this.size_;
     }
-    return this.size_ = this.binding_.getSize();
+    this.size_ = this.binding_.getSize();
+    if (this.size_.width == 0 || this.size_.height == 0) {
+      // Only report when the visibility is "visible" or "prerender".
+      const visibilityState = this.viewer_.getVisibilityState();
+      if (visibilityState == VisibilityState.PRERENDER ||
+          visibilityState == VisibilityState.VISIBLE) {
+        // TODO(dvoytenko, #8044): only report 1% for now until most of cases
+        // are elimitated.
+        if (Math.random() < 0.01) {
+          dev().error(TAG_, 'viewport has zero dimensions');
+        }
+      }
+    }
+    return this.size_;
   }
 
   /**
@@ -435,19 +455,54 @@ export class Viewport {
    */
   enterLightboxMode() {
     this.viewer_.sendMessage('requestFullOverlay', {}, /* cancelUnsent */true);
-    this.disableTouchZoom();
+    this.enterOverlayMode();
     this.hideFixedLayer();
     this.vsync_.mutate(() => this.binding_.updateLightboxMode(true));
   }
 
   /**
-   * Instruct the viewport to enter lightbox mode.
+   * Instruct the viewport to leave lightbox mode.
    */
   leaveLightboxMode() {
     this.viewer_.sendMessage('cancelFullOverlay', {}, /* cancelUnsent */true);
     this.showFixedLayer();
-    this.restoreOriginalTouchZoom();
+    this.leaveOverlayMode();
     this.vsync_.mutate(() => this.binding_.updateLightboxMode(false));
+  }
+
+  /*
+   * Instruct the viewport to enter overlay mode.
+   */
+  enterOverlayMode() {
+    this.disableTouchZoom();
+    this.disableScroll();
+  }
+
+  /*
+   * Instruct the viewport to leave overlay mode.
+   */
+  leaveOverlayMode() {
+    this.resetScroll();
+    this.restoreOriginalTouchZoom();
+  }
+
+  /*
+   * Disable the scrolling by setting overflow: hidden.
+   * Should only be used for temporarily disabling scroll.
+   */
+  disableScroll() {
+    this.vsync_.mutate(() => {
+      this.binding_.disableScroll();
+    });
+  }
+
+  /*
+   * Reset the scrolling by removing overflow: hidden.
+   */
+  resetScroll() {
+    this.vsync_.mutate(() => {
+      this.binding_.resetScroll();
+    });
   }
 
   /**
@@ -812,6 +867,17 @@ export class ViewportBindingDef {
    */
   showViewerHeader(unusedTransient, unusedPaddingTop) {}
 
+  /*
+   * Disable the scrolling by setting overflow: hidden.
+   * Should only be used for temporarily disabling scroll.
+   */
+  disableScroll() {}
+
+  /*
+   * Reset the scrolling by removing overflow: hidden.
+   */
+  resetScroll() {}
+
   /**
    * Updates the viewport whether it's currently in the lightbox or a normal
    * mode.
@@ -991,6 +1057,18 @@ export class ViewportBindingNatural_ {
     if (!transient) {
       this.updatePaddingTop(paddingTop);
     }
+  }
+
+  /** @override */
+  disableScroll() {
+    this.win.document.documentElement.classList.add(
+        'i-amphtml-scroll-disabled');
+  }
+
+  /** @override */
+  resetScroll() {
+    this.win.document.documentElement.classList.remove(
+        'i-amphtml-scroll-disabled');
   }
 
   /** @override */
@@ -1243,9 +1321,10 @@ export class ViewportBindingNaturalIosEmbed_ {
       // Add extra paddingTop to make the content stay at the same position
       // when the hiding header operation is transient
       onDocumentReady(this.win.document, doc => {
+        const body = dev().assertElement(doc.body);
         const existingPaddingTop =
-            this.win./*OK*/getComputedStyle(doc.body)['padding-top'] || '0';
-        setStyles(dev().assertElement(doc.body), {
+            computedStyle(this.win, body).paddingTop || '0';
+        setStyles(body, {
           paddingTop: `calc(${existingPaddingTop} + ${lastPaddingTop}px)`,
           borderTop: '',
         });
@@ -1262,6 +1341,16 @@ export class ViewportBindingNaturalIosEmbed_ {
     }
     // No need to adjust borderTop and paddingTop when the showing header
     // operation is transient
+  }
+
+  /** @override */
+  disableScroll() {
+    // This is not supported in ViewportBindingNaturalIosEmbed_
+  }
+
+  /** @override */
+  resetScroll() {
+    // This is not supported in ViewportBindingNaturalIosEmbed_
   }
 
   /** @override */
@@ -1546,6 +1635,16 @@ export class ViewportBindingIosEmbedWrapper_ {
     if (!transient) {
       this.updatePaddingTop(paddingTop);
     }
+  }
+
+  /** @override */
+  disableScroll() {
+    this.wrapper_.classList.add('i-amphtml-scroll-disabled');
+  }
+
+  /** @override */
+  resetScroll() {
+    this.wrapper_.classList.remove('i-amphtml-scroll-disabled');
   }
 
   /** @override */
