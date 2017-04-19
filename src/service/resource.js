@@ -86,10 +86,10 @@ export class Resource {
 
   /**
    * @param {!Element} element
-   * @return {?Resource}
+   * @return {Resource}
    */
   static forElementOptional(element) {
-    return /** @type {!Resource} */ (element[RESOURCE_PROP_]);
+    return /** @type {Resource} */ (element[RESOURCE_PROP_]);
   }
 
   /**
@@ -282,7 +282,8 @@ export class Resource {
    * for details.
    */
   build() {
-    if (this.blacklisted_ || !this.element.isUpgraded()) {
+    if (this.blacklisted_ || !this.element.isUpgraded()
+        || !this.resources_.grantBuildPermission()) {
       return;
     }
     try {
@@ -488,7 +489,9 @@ export class Resource {
   }
 
   /**
-   * Returns a previously measured layout box.
+   * Returns a previously measured layout box adjusted to the viewport. This
+   * mainly affects fixed-position elements that are adjusted to be always
+   * relative to the document position in the viewport.
    * @return {!../layout-rect.LayoutRectDef}
    */
   getLayoutBox() {
@@ -498,6 +501,15 @@ export class Resource {
     const viewport = this.resources_.getViewport();
     return moveLayoutRect(this.layoutBox_, viewport.getScrollLeft(),
         viewport.getScrollTop());
+  }
+
+  /**
+   * Returns a previously measured layout box relative to the page. The
+   * fixed-position elements are relative to the top of the document.
+   * @return {!../layout-rect.LayoutRectDef}
+   */
+  getPageLayoutBox() {
+    return this.layoutBox_;
   }
 
   /**

@@ -93,7 +93,7 @@ export class VisibilityModel {
     this.lastSeenTime_ = 0;
 
     /** @private {time} milliseconds since epoch */
-    this.fistVisibleTime_ = 0;
+    this.firstVisibleTime_ = 0;
 
     /** @private {time} milliseconds since epoch */
     this.lastVisibleTime_ = 0;
@@ -179,7 +179,7 @@ export class VisibilityModel {
       firstSeenTime: timeBase(this.firstSeenTime_, startTime),
       lastSeenTime: timeBase(this.lastSeenTime_, startTime),
       lastVisibleTime: timeBase(this.lastVisibleTime_, startTime),
-      fistVisibleTime: timeBase(this.fistVisibleTime_, startTime),
+      firstVisibleTime: timeBase(this.firstVisibleTime_, startTime),
 
       // Durations.
       maxContinuousVisibleTime: this.maxContinuousVisibleTime_,
@@ -230,6 +230,8 @@ export class VisibilityModel {
    * @private
    */
   updateCounters_(visibility) {
+    dev().assert(visibility >= 0 && visibility <= 1,
+        'invalid visibility value: %s', visibility);
     const now = Date.now();
 
     if (visibility > 0) {
@@ -260,7 +262,7 @@ export class VisibilityModel {
       } else {
         // The resource came into view: start counting.
         dev().assert(!this.lastVisibleUpdateTime_);
-        this.fistVisibleTime_ = this.fistVisibleTime_ || now;
+        this.firstVisibleTime_ = this.firstVisibleTime_ || now;
       }
       this.lastVisibleUpdateTime_ = now;
       this.minVisiblePercentage_ =

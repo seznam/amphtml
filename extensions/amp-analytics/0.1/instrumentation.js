@@ -42,9 +42,9 @@ import {
 } from '../../../src/service';
 import {isEnumValue} from '../../../src/types';
 import {isExperimentOn} from '../../../src/experiments';
-import {timerFor} from '../../../src/timer';
-import {viewerForDoc} from '../../../src/viewer';
-import {viewportForDoc} from '../../../src/viewport';
+import {timerFor} from '../../../src/services';
+import {viewerForDoc} from '../../../src/services';
+import {viewportForDoc} from '../../../src/services';
 
 const MIN_TIMER_INTERVAL_SECONDS_ = 0.5;
 const DEFAULT_MAX_TIMER_LENGTH_SECONDS_ = 7200;
@@ -161,6 +161,14 @@ export class InstrumentationService {
   /** @override */
   dispose() {
     this.ampdocRoot_.dispose();
+  }
+
+  /**
+   * @param {!Node} context
+   * @return {!./analytics-root.AnalyticsRoot}
+   */
+  getAnalyticsRoot(context) {
+    return this.findRoot_(context);
   }
 
   /**
@@ -501,7 +509,7 @@ export class InstrumentationService {
    */
   isTriggerAllowed_(triggerType, element) {
     if (element.ownerDocument.defaultView != this.ampdoc.win) {
-      return ALLOWED_IN_EMBED.indexOf(triggerType) > -1;
+      return ALLOWED_IN_EMBED.includes(triggerType);
     }
     return true;
   }

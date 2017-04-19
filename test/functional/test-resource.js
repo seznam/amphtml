@@ -18,7 +18,7 @@ import {AmpDocSingle} from '../../src/service/ampdoc-impl';
 import {Resources} from '../../src/service/resources-impl';
 import {Resource, ResourceState} from '../../src/service/resource';
 import {layoutRectLtwh} from '../../src/layout-rect';
-import {viewerForDoc} from '../../src/viewer';
+import {viewerForDoc} from '../../src/services';
 import * as sinon from 'sinon';
 
 
@@ -124,6 +124,18 @@ describe('Resource', () => {
     expect(resource.getState()).to.equal(ResourceState.NOT_LAID_OUT);
   });
 
+  it('should not build if permission is not granted', () => {
+    let permission = false;
+    elementMock.expects('isUpgraded').returns(true).atLeast(1);
+    sandbox.stub(resources, 'grantBuildPermission', () => permission);
+    resource.build();
+    expect(resource.getState()).to.equal(ResourceState.NOT_BUILT);
+
+    permission = true;
+    resource.build();
+    expect(resource.getState()).to.equal(ResourceState.NOT_LAID_OUT);
+  });
+
   it('should blacklist on build failure', () => {
     elementMock.expects('isUpgraded').returns(true).atLeast(1);
     elementMock.expects('build').throws('Failed').once();
@@ -165,6 +177,9 @@ describe('Resource', () => {
       resource.measure();
     }).to.not.throw();
     expect(resource.getLayoutBox()).to.eql(layoutRectLtwh(0, 100, 300, 100));
+    // pageLayoutBox == layoutBox
+    expect(resource.getPageLayoutBox()).to.eql(
+        layoutRectLtwh(0, 100, 300, 100));
   });
 
   it('should allow measure even when not built', () => {
@@ -295,17 +310,22 @@ describe('Resource', () => {
     elementMock.expects('isUpgraded').returns(true).atLeast(1);
     elementMock.expects('getBoundingClientRect').returns(
         layoutRectLtwh(0, 0, 10, 10)).once();
+    viewportMock.expects('getScrollTop').returns(11).atLeast(0);
     element.offsetParent = {
       isAlwaysFixed: () => true,
     };
     resource.measure();
     expect(resource.isFixed()).to.be.true;
+    // layoutBox != pageLayoutBox
+    expect(resource.getLayoutBox()).to.eql(layoutRectLtwh(0, 11, 10, 10));
+    expect(resource.getPageLayoutBox()).to.eql(layoutRectLtwh(0, 0, 10, 10));
   });
 
   it('should calculate fixed for fixed-style parent', () => {
     elementMock.expects('isUpgraded').returns(true).atLeast(1);
     elementMock.expects('getBoundingClientRect').returns(
         layoutRectLtwh(0, 0, 10, 10)).once();
+    viewportMock.expects('getScrollTop').returns(11).atLeast(0);
     const fixedParent = document.createElement('div');
     fixedParent.style.position = 'fixed';
     document.body.appendChild(fixedParent);
@@ -320,6 +340,9 @@ describe('Resource', () => {
         .once();
     resource.measure();
     expect(resource.isFixed()).to.be.true;
+    // layoutBox != pageLayoutBox
+    expect(resource.getLayoutBox()).to.eql(layoutRectLtwh(0, 11, 10, 10));
+    expect(resource.getPageLayoutBox()).to.eql(layoutRectLtwh(0, 0, 10, 10));
   });
 
   describe('placeholder measure', () => {

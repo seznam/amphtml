@@ -39,7 +39,7 @@ class IntersectionObserverStub {
     if (this.disconnected) {
       throw new Error('disconnected');
     }
-    if (this.elements.indexOf(element) == -1) {
+    if (!this.elements.includes(element)) {
       this.elements.push(element);
     }
   }
@@ -275,12 +275,18 @@ describes.fakeWin('VisibilityManagerForDoc', {amp: true}, env => {
 
     // Trigger tick.
     sandbox.stub(viewport, 'getRect', () => {
-      return {left: 0, top: 0, width: 100, height: 100};
+      return layoutRectLtwh(0, 0, 100, 100);
+    });
+    sandbox.stub(viewport, 'getLayoutRect', element => {
+      if (element == rootElement) {
+        return layoutRectLtwh(0, 50, 100, 100);
+      }
+      return null;
     });
     expect(rootElement.getLayoutBox())
-        .to.contain({left: 0, top: 0, width: 100, height: 100});
+        .to.contain({left: 0, top: 50, width: 100, height: 100});
     viewport.scrollObservable_.fire({type: 'scroll'});
-    expect(model.getVisibility_()).to.equal(1);
+    expect(model.getVisibility_()).to.equal(0.5);
 
     return eventPromise.then(() => {
       expect(inOb.observeEntries_).to.have.length(0);
@@ -417,6 +423,34 @@ describes.fakeWin('VisibilityManagerForDoc', {amp: true}, env => {
 
       expect(state.elementX).to.be.undefined;
     });
+  });
+
+  it('should protect from invalid intersection values', () => {
+    const target = win.document.createElement('div');
+    root.listenElement(target, {}, null, eventResolver);
+    expect(root.models_).to.have.length(1);
+    const model = root.models_[0];
+
+    const inOb = root.getIntersectionObserver_();
+    expect(model.getVisibility_()).to.equal(0);
+
+    // Valid value.
+    inOb.callback([{target, intersectionRatio: 0.3}]);
+    expect(model.getVisibility_()).to.equal(0.3);
+
+    // Invalid negative value.
+    inOb.callback([{target, intersectionRatio: -0.01}]);
+    expect(model.getVisibility_()).to.equal(0);
+
+    inOb.callback([{target, intersectionRatio: -1000}]);
+    expect(model.getVisibility_()).to.equal(0);
+
+    // Invalid overflow value.
+    inOb.callback([{target, intersectionRatio: 1.01}]);
+    expect(model.getVisibility_()).to.equal(1);
+
+    inOb.callback([{target, intersectionRatio: 1000}]);
+    expect(model.getVisibility_()).to.equal(1);
   });
 
   it('should listen on a element with different specs', () => {
@@ -744,24 +778,6 @@ describes.realWin('VisibilityManager integrated', {amp: true}, env => {
     viewer = win.services.viewer.obj;
     resources = win.services.resources.obj;
 
-    clock = sandbox.useFakeTimers();
-    startTime = 10000;
-    clock.tick(startTime);
-
-    const docState = documentStateFor(win);
-    sandbox.stub(docState, 'isHidden', () => false);
-    sandbox.stub(viewer, 'getFirstVisibleTime', () => startTime);
-
-    ampElement = doc.createElement('amp-img');
-    ampElement.id = 'abc';
-    ampElement.setAttribute('width', '100');
-    ampElement.setAttribute('height', '100');
-    doc.body.appendChild(ampElement);
-    const resource = resources.getResourceForElement(ampElement);
-    scrollTop = 10;
-    sandbox.stub(resource, 'getLayoutBox',
-        () => layoutRectLtwh(0, scrollTop, 100, 100));
-
     observeSpy = sandbox.stub();
     unobserveSpy = sandbox.stub();
     const inob = callback => {
@@ -775,6 +791,9 @@ describes.realWin('VisibilityManager integrated', {amp: true}, env => {
       sandbox.stub(win, 'IntersectionObserver', inob);
     } else {
       win.IntersectionObserver = inob;
+      win.IntersectionObserverEntry = function() {};
+      win.IntersectionObserverEntry.prototype.intersectionRatio = 0;
+      expect(nativeIntersectionObserverSupported(ampdoc.win)).to.be.true;
     }
 
     readyPromise = new Promise(resolve => {
@@ -785,6 +804,37 @@ describes.realWin('VisibilityManager integrated', {amp: true}, env => {
     });
     eventPromise2 = new Promise(resolve => {
       eventResolver2 = resolve;
+    });
+
+    const docState = documentStateFor(win);
+    sandbox.stub(docState, 'isHidden', () => false);
+    sandbox.stub(viewer, 'getFirstVisibleTime', () => startTime);
+
+    ampElement = doc.createElement('amp-img');
+    ampElement.id = 'abc';
+    ampElement.setAttribute('width', '100');
+    ampElement.setAttribute('height', '100');
+    doc.body.appendChild(ampElement);
+    return new Promise(resolve => {
+      if (resources.getResourceForElementOptional(ampElement)) {
+        resolve();
+      } else {
+        const interval = setInterval(() => {
+          if (resources.getResourceForElementOptional(ampElement)) {
+            clearInterval(interval);
+            resolve();
+          }
+        }, 4);
+      }
+    }).then(() => {
+      clock = sandbox.useFakeTimers();
+      startTime = 10000;
+      clock.tick(startTime);
+
+      const resource = resources.getResourceForElement(ampElement);
+      scrollTop = 10;
+      sandbox.stub(resource, 'getLayoutBox',
+          () => layoutRectLtwh(0, scrollTop, 100, 100));
     });
   });
 
@@ -834,7 +884,6 @@ describes.realWin('VisibilityManager integrated', {amp: true}, env => {
         elementX: 0,
         elementY: 75,
         firstSeenTime: 100,
-        fistVisibleTime: 100,
         lastSeenTime: 100,
         lastVisibleTime: 100,
         loadTimeVisibility: 25,
@@ -883,7 +932,6 @@ describes.realWin('VisibilityManager integrated', {amp: true}, env => {
           elementX: 0,
           elementY: 75,
           firstSeenTime: 135,
-          fistVisibleTime: 235,  // 135 + 100
           lastSeenTime: 235,
           lastVisibleTime: 235,
           loadTimeVisibility: 5,
@@ -906,7 +954,6 @@ describes.realWin('VisibilityManager integrated', {amp: true}, env => {
           elementX: 0,
           elementY: 65,
           firstSeenTime: 135,
-          fistVisibleTime: 335,  // 235 + 100
           lastSeenTime: 335,
           lastVisibleTime: 335,
           loadTimeVisibility: 5,
@@ -973,7 +1020,6 @@ describes.realWin('VisibilityManager integrated', {amp: true}, env => {
           elementX: 0,
           elementY: 65,
           firstSeenTime: 100,
-          fistVisibleTime: 100,
           lastSeenTime: 4299,
           lastVisibleTime: 4299,
           loadTimeVisibility: 25,
